@@ -38,6 +38,7 @@ type ControllerConfigDb struct {
 	ConnectionUrl        string                 `json:"connection_url,omitempty" toml:"connection_url,omitempty,omitzero"`
 	CaCertificate        string                 `json:"ca_certificate,omitempty" toml:"ca_certificate,omitempty,omitzero"`
 	ClientCertificate    string                 `json:"client_certificate,omitempty" toml:"client_certificate,omitempty,omitzero"`
+	ClientKeyPkcs8Pem    string                 `json:"client_key_pkcs8_pem,omitempty" toml:"client_key_pkcs8_pem,omitempty,omitzero"`
 	InMemory             string                 `json:"in_memory,omitempty" toml:"in_memory,omitempty,omitzero"`
 	VersionCheckDisabled bool                   `json:"version_check_disabled,omitempty" toml:"version_check_disabled,omitempty,omitzero"`
 	Etcd                 ControllerConfigDbEtcd `json:"etcd,omitempty" toml:"etcd,omitempty,omitzero"`
@@ -54,9 +55,13 @@ type ControllerConfigHttp struct {
 }
 
 type ControllerConfigHttps struct {
-	Enabled       bool   `json:"enabled,omitempty" toml:"enabled,omitempty,omitzero"`
-	ListenAddress string `json:"listen_address,omitempty" toml:"listen_address,omitempty,omitzero"`
-	Port          int32  `json:"port,omitempty" toml:"port,omitempty,omitzero"`
+	Enabled            bool   `json:"enabled,omitempty" toml:"enabled,omitempty,omitzero"`
+	ListenAddress      string `json:"listen_address,omitempty" toml:"listen_address,omitempty,omitzero"`
+	Port               int32  `json:"port,omitempty" toml:"port,omitempty,omitzero"`
+	Keystore           string `json:"keystore,omitempty" toml:"keystore,omitempty,omitzero"`
+	KeystorePassword   string `json:"keystore_password,omitempty" toml:"keystore_password,omitempty,omitzero"`
+	Truststore         string `json:"truststore,omitempty" toml:"truststore,omitempty,omitzero"`
+	TruststorePassword string `json:"truststore_password,omitempty" toml:"truststore_password,omitempty,omitzero"`
 }
 
 type ControllerConfigLdap struct {

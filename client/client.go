@@ -20,6 +20,8 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,12 +44,12 @@ type Client struct {
 	lim        *rate.Limiter
 	log        interface{} // must be either Logger or LeveledLogger
 
-	Nodes                 *NodeService
-	ResourceDefinitions   *ResourceDefinitionService
-	Resources             *ResourceService
-	ResourceGroups        *ResourceGroupService
-	StoragPoolDefinitions *StoragePoolDefinitionService
-	Encryption            *EncryptionService
+	Nodes                  *NodeService
+	ResourceDefinitions    *ResourceDefinitionService
+	Resources              *ResourceService
+	ResourceGroups         *ResourceGroupService
+	StoragePoolDefinitions *StoragePoolDefinitionService
+	Encryption             *EncryptionService
 }
 
 // Logger represents a standard logger interface
@@ -131,9 +133,60 @@ func Limit(r rate.Limit, b int) Option {
 	}
 }
 
+// buildHttpClient constructs an HTTP client which will be used to connect to
+// the LINSTOR controller. It recongnizes some environment variables which can
+// be used to configure the HTTP client at runtime. If an invalid key or
+// certificate is passed, an error is returned.
+// If none or not all of the environment variables are passed, the default
+// client is used as a fallback.
+func buildHttpClient() (*http.Client, error) {
+	certPEM, cert := os.LookupEnv("LS_USER_CERTIFICATE")
+	keyPEM, key := os.LookupEnv("LS_USER_KEY")
+	caPEM, ca := os.LookupEnv("LS_ROOT_CA")
+	if !(cert && key && ca) {
+		// not all environment variables found: fall back to default client
+		return http.DefaultClient, nil
+	}
+
+	keyPair, err := tls.X509KeyPair([]byte(certPEM), []byte(keyPEM))
+	if err != nil {
+		return nil, fmt.Errorf("failed to load keys: %w", err)
+	}
+	caPool := x509.NewCertPool()
+	ok := caPool.AppendCertsFromPEM([]byte(caPEM))
+	if !ok {
+		return nil, fmt.Errorf("failed to get a valid certificate from LS_ROOT_CA")
+	}
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				Certificates: []tls.Certificate{keyPair},
+				RootCAs:      caPool,
+			},
+		},
+	}, nil
+}
+
 // NewClient takes an arbitrary number of options and returns a Client or an error.
+// It recognizes several environment variables which can be used to configure
+// the client at runtime:
+//
+// - LS_CONTROLLERS: a comma-separated list of LINSTOR controllers to connect to.
+// Currently, golinstor will only use the first one.
+//
+// - LS_USERNAME, LS_PASSWORD: can be used to authenticate against the LINSTOR
+// controller using HTTP basic authentication.
+//
+// - LS_USER_CERTIFICATE, LS_USER_KEY, LS_ROOT_CA: can be used to enable TLS on
+// the HTTP client, enabling encrypted communication with the LINSTOR controller.
+//
+// Options passed to NewClient take precedence over options passed in via
+// environment variables.
 func NewClient(options ...Option) (*Client, error) {
-	httpClient := http.DefaultClient
+	httpClient, err := buildHttpClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build http client: %w", err)
+	}
 
 	hostPort := "localhost:3370"
 	controllers := os.Getenv("LS_CONTROLLERS")
@@ -164,9 +217,12 @@ func NewClient(options ...Option) (*Client, error) {
 	c := &Client{
 		httpClient: httpClient,
 		baseURL:    baseURL,
-		basicAuth:  &BasicAuthCfg{},
-		lim:        rate.NewLimiter(rate.Inf, 0),
-		log:        log.New(os.Stdout, "", 0),
+		basicAuth: &BasicAuthCfg{
+			Username: os.Getenv("LS_USERNAME"),
+			Password: os.Getenv("LS_PASSWORD"),
+		},
+		lim: rate.NewLimiter(rate.Inf, 0),
+		log: log.New(os.Stdout, "", 0),
 	}
 
 	c.Nodes = &NodeService{client: c}
@@ -174,7 +230,7 @@ func NewClient(options ...Option) (*Client, error) {
 	c.Resources = &ResourceService{client: c}
 	c.Encryption = &EncryptionService{client: c}
 	c.ResourceGroups = &ResourceGroupService{client: c}
-	c.StoragPoolDefinitions = &StoragePoolDefinitionService{client: c}
+	c.StoragePoolDefinitions = &StoragePoolDefinitionService{client: c}
 
 	for _, opt := range options {
 		if err := opt(c); err != nil {
