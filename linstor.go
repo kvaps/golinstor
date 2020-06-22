@@ -92,7 +92,8 @@ func NewResourceDeployment(c ResourceDeploymentConfig) ResourceDeployment {
 	r := ResourceDeployment{ResourceDeploymentConfig: c}
 
 	if r.Name == "" {
-		r.Name = fmt.Sprintf("auto-%s", uuid.NewV4())
+		u, _ := uuid.NewV4()
+		r.Name = fmt.Sprintf("auto-%s", u)
 	}
 
 	if len(r.NodeList) == 0 && len(r.ClientList) == 0 && r.AutoPlace == 0 {
@@ -564,7 +565,11 @@ func (r ResourceDeployment) NewResourceFromSnapshot(snapshotID string) error {
 }
 
 func (r ResourceDeployment) NewResourceFromResource(sourceRes ResourceDeployment) error {
-	snap, err := sourceRes.SnapshotCreate(fmt.Sprintf("tmp-%s", uuid.NewV4()))
+	u, err := uuid.NewV4()
+	if err != nil {
+		return err
+	}
+	snap, err := sourceRes.SnapshotCreate(fmt.Sprintf("tmp-%s", u))
 	if err != nil {
 		return err
 	}
